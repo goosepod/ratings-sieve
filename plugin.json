@@ -1,0 +1,15 @@
+{
+  "id": "sonic_sieve",
+  "name": "Sonic Sieve",
+  "author": "Self Hosting",
+  "description": "Opt-in, account-bound rating and heart filtering for Similar Song.",
+  "targets": ["flask"],
+  "requirements": [],
+  "versions": [
+    {
+      "version": "0.1.0",
+      "min_core_version": "3.7.0",
+      "changelog": "Initial development endpoint; requires explicit account and token configuration."
+    }
+  ]
+}
