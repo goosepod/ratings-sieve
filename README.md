@@ -27,8 +27,21 @@ your existing Navidrome preferences; it does not change them.
 You need AudioMuse AI with analyzed music and a configured Navidrome server.
 The plugin is tested with AudioMuse AI 3.7.0 and Navidrome 0.64.2.
 
-This repository currently provides development packaging rather than a published
-installable catalogue. Build the archive:
+1. Open AudioMuse's **Manage Plugins → Repositories** and add:
+
+   ```text
+   https://raw.githubusercontent.com/goosepod/ratings-sieve/main/manifest.json
+   ```
+
+2. Refresh the catalogue, find **Ratings Sieve**, and click **Install**.
+3. Apply the installation when AudioMuse asks to restart.
+4. Open **Ratings Sieve → Settings** and follow the setup steps below.
+
+The installer verifies the archive checksum and installs the declared encryption
+dependency on supported container builds. Packaged versions are available on the
+[releases page](https://github.com/goosepod/ratings-sieve/releases).
+
+To build a development archive from source:
 
 ```sh
 git clone https://github.com/goosepod/ratings-sieve.git
@@ -38,11 +51,7 @@ python3 -m venv .venv
 .venv/bin/python tools/build_plugin.py
 ```
 
-The archive is written to `dist/ratings_sieve-<version>.zip`. Follow AudioMuse's
-[local plugin catalogue instructions](https://neptunehub.github.io/AudioMuse-AI/PLUGIN/#test-your-plugin-locally)
-using that archive and [plugin.json](plugin.json), then apply the installation
-through AudioMuse. Its plugin manager installs the declared encryption dependency
-on supported container builds.
+The archive is written to `dist/ratings_sieve-<version>.zip`.
 
 ## Set up through AudioMuse
 

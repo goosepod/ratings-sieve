@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    {
+      "description": "Per-user rating and heart filtering for Similar Song with independent on/off settings.",
+      "id": "ratings_sieve",
+      "name": "Ratings Sieve",
+      "pluginUrl": "https://raw.githubusercontent.com/goosepod/ratings-sieve/main/plugin.json",
+      "author": "Self Hosting"
+    }
+  ]
+}
