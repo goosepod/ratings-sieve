@@ -183,16 +183,6 @@ database is created lazily on the first enabled preference lookup. Keep it on a
 persistent private volume if using a standalone container. This setting is
 ignored when running as an installed AudioMuse plugin.
 
-### Renaming from Sonic Sieve
-
-The repository/project name is now `ratings-sieve`; the Python package and
-AudioMuse plugin ID are `ratings_sieve`. The plugin URL is now
-`/plugins/ratings_sieve/api/similar_tracks`, and the explicit account header is
-`X-Ratings-Sieve-Token`. Update client URLs/header names and profile environment
-variable references (`RATINGS_SIEVE_LISTENER_*` in the example). Existing
-`AM_PREF_*` variables are unchanged. No old plugin deployment is automatically
-reconfigured or restarted, and the previous version had no database to migrate.
-
 `plugin.json` is a development manifest. The archive in `dist/` contains only
 plugin code at its root. Publishing still needs a catalogue and a reachable
 `sourceUrl`/checksum in release metadata. No catalogue is served automatically.
