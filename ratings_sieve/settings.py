@@ -27,6 +27,10 @@ class SettingsStorageError(ConfigurationError):
     pass
 
 
+class ConnectionTestError(ValueError):
+    pass
+
+
 class SecretBox:
     def __init__(self, path):
         self.path = Path(path)
@@ -263,11 +267,17 @@ def register_settings(bp, store, cache_factory):
                     updated, new_tokens = configuration_from_form(request.form, configuration, store)
                     if action == "test":
                         router = router_from_settings(updated, store, lambda: None)
-                        router.accounts[0].service.audiomuse.check_connection()
+                        try:
+                            router.accounts[0].service.audiomuse.check_connection()
+                        except BackendError:
+                            raise ConnectionTestError("AudioMuse connection failed. Check the AudioMuse API URL, API token, and selected server.") from None
                         tested = 0
                         for account in router.accounts:
                             if isinstance(account.service, FilterService):
-                                account.service.navidrome.check_connection()
+                                try:
+                                    account.service.navidrome.check_connection()
+                                except BackendError:
+                                    raise ConnectionTestError(f"Navidrome connection failed for {account.name}. Check that account's credentials and server connection.") from None
                                 tested += 1
                         message = f"AudioMuse and {tested} enabled Navidrome account(s) connected successfully. No settings were saved."
                     else:
@@ -283,7 +293,7 @@ def register_settings(bp, store, cache_factory):
             csrf = store.box.csrf()
             body = render_template("ratings_sieve/settings.html", configuration=configuration,
                 servers=store.servers(), issued=issued, message=message, error=error, csrf=csrf)
-        except SettingsStorageError as exc:
+        except (SettingsStorageError, ConnectionTestError) as exc:
             error, status = str(exc), 503
         except (ConfigurationError, ValueError) as exc:
             error, status = str(exc), 400

@@ -11,6 +11,13 @@
   ],
   "versions": [
     {
+      "version": "0.4.1",
+      "min_core_version": "3.7.0",
+      "changelog": "Fix connection testing to use the supported AudioMuse server-list endpoint and identify which connection failed.",
+      "sourceUrl": "https://github.com/goosepod/ratings-sieve/releases/download/v0.4.1/ratings_sieve-0.4.1.zip",
+      "checksum": "55c47d73097eed999aab8aa96fc8961b"
+    },
+    {
       "version": "0.4.0",
       "min_core_version": "3.7.0",
       "changelog": "Add an admin settings page with database configuration, encrypted credentials, account controls, connection tests and cache clearing.",

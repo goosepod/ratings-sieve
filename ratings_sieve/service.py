@@ -6,6 +6,7 @@ import logging
 import secrets
 import time
 from urllib.parse import urlencode, urlsplit
+from urllib.error import HTTPError
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .core import Policy, Preference, select, unique_candidates
@@ -40,6 +41,9 @@ class JsonHTTP:
                 if len(raw) > 8_000_000:
                     raise ValueError("response too large")
                 return json.loads(raw)
+        except HTTPError as error:
+            error.close()
+            raise BackendError("backend request failed") from None
         except Exception:
             raise BackendError("backend request failed") from None
 
@@ -62,10 +66,14 @@ class AudioMuse:
         result = self.http.get(self.url + "/api/health", {}, self.headers, timeout=5)
         if not isinstance(result, dict) or result.get("error"):
             raise BackendError("AudioMuse connection failed")
-        # Health is public in AudioMuse; status also verifies API authentication.
-        result = self.http.get(self.url + "/api/status", {}, self.headers, timeout=5)
-        if not isinstance(result, dict) or result.get("error"):
+        # Health is public. The real server-list endpoint verifies authentication
+        # and confirms this AudioMuse instance has the selected catalogue.
+        result = self.http.get(self.url + "/api/servers", {}, self.headers, timeout=5)
+        if (not isinstance(result, dict) or result.get("error")
+                or not isinstance(result.get("servers"), list)):
             raise BackendError("AudioMuse API authentication failed")
+        if not any(isinstance(server, dict) and server.get("name") == self.server for server in result["servers"]):
+            raise BackendError("AudioMuse server selection is unavailable")
 
 
 class Navidrome:

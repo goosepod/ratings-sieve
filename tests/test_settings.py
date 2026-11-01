@@ -104,7 +104,9 @@ class SettingsPageTests(unittest.TestCase):
 
     @staticmethod
     def http(url, params, *args, **kwargs):
-        if url.endswith(("/api/health", "/api/status")):
+        if url.endswith("/api/servers"):
+            return {"servers": [{"name": "Navidrome"}]}
+        if url.endswith("/api/health"):
             return {"status": "ok"}
         if url.endswith("/rest/ping.view"):
             return {"subsonic-response": {"status": "ok"}}
@@ -252,7 +254,23 @@ class SettingsPageTests(unittest.TestCase):
         with patch("ratings_sieve.service.JsonHTTP.get", side_effect=BackendError("private-url")):
             result = self.client.post(self.url, data=data, headers={"X-Requested-With": "RatingsSieve"})
         self.assertEqual(result.status_code, 503)
+        self.assertIn("AudioMuse connection failed", result.json["error"])
         self.assertNotIn("private-url", result.text)
+        self.assertIsNone(self.store.configuration)
+
+    def test_failed_navidrome_connection_identifies_the_account(self):
+        data = self.form(action="test")
+
+        def http(url, params, *args, **kwargs):
+            if url.endswith("/rest/ping.view"):
+                raise BackendError("sensitive URL or credential")
+            return self.http(url, params, *args, **kwargs)
+
+        with patch("ratings_sieve.service.JsonHTTP.get", side_effect=http):
+            result = self.client.post(self.url, data=data, headers={"X-Requested-With": "RatingsSieve"})
+        self.assertEqual(result.status_code, 503)
+        self.assertIn("Navidrome connection failed for listener_one", result.json["error"])
+        self.assertNotIn("sensitive", result.text)
         self.assertIsNone(self.store.configuration)
 
     def test_clear_cache_only_deletes_preferences_and_does_not_save_form_changes(self):
@@ -364,9 +382,51 @@ class ConnectionAdapterTests(unittest.TestCase):
 
     def test_audiomuse_health_uses_upstream_authentication(self):
         http = Mock()
-        http.get.return_value = {"status": "ok"}
+        http.get.side_effect = [{"status": "ok"}, {"servers": [{"name": "Navidrome"}]}]
         AudioMuse("http://am", "Navidrome", "token", http).check_connection()
         self.assertEqual(http.get.call_args.args[2], {"Authorization": "Bearer token"})
+
+    def test_audiomuse_connection_uses_real_http_routes_and_checks_auth(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        seen = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                path = self.path.split("?")[0]
+                seen.append(path)
+                if path == "/api/health":
+                    payload, status = {"status": "ok"}, 200
+                elif path == "/api/servers":
+                    payload, status = {"servers": [{"name": "Navidrome"}]}, 200
+                    if self.headers.get("Authorization") != "Bearer valid":
+                        payload, status = {"error": "unauthorized"}, 401
+                else:
+                    payload, status = {"error": "not found"}, 404
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(payload).encode())
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            url = "http://127.0.0.1:" + str(server.server_port)
+            AudioMuse(url, "Navidrome", "valid").check_connection()
+            self.assertEqual(seen, ["/api/health", "/api/servers"])
+            with self.assertRaises(BackendError):
+                AudioMuse(url, "Navidrome", "invalid").check_connection()
+            with self.assertRaises(BackendError):
+                AudioMuse(url, "Missing server", "valid").check_connection()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
 
 if __name__ == "__main__":
