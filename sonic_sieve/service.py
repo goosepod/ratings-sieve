@@ -108,3 +108,15 @@ class FilterService:
         if time.monotonic() > deadline:
             raise BackendError("preference lookup budget exceeded")
         return select(candidates, preferences, count, self.policy)
+
+
+class BypassService:
+    """Return core results untouched, without reading any account preferences."""
+
+    def __init__(self, audiomuse):
+        self.audiomuse = audiomuse
+
+    def similar(self, params, count):
+        if type(count) is not int or not 1 <= count <= 100:
+            raise ValueError("n must be 1..100")
+        return self.audiomuse.candidates(params, count)

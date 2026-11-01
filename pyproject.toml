@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sonic-sieve"
-version = "0.1.0"
+version = "0.2.0"
 description = "Opt-in Navidrome preference filtering for AudioMuse similarity"
 requires-python = ">=3.11"
 dependencies = ["Flask>=3.0,<4"]

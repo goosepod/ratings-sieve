@@ -17,8 +17,12 @@ the Navidrome account so item_id values identify the right library's tracks.
 
 The existing Navidrome AudioMuse plugin appends /api/similar_tracks to apiUrl.
 Its SonicSimilarity request contains Song and Count, with no listener identity.
-The HTTP call also carries no listener identity. Sonic Sieve therefore uses an
-explicitly configured account; it does not infer the current Navidrome listener.
+The HTTP call also carries no listener identity. Sonic Sieve supports independent
+profiles selected by distinct authenticated request tokens. It does not infer the
+current Navidrome listener from an unverified username. A trusted integration must
+associate the authenticated listener with the correct token. A separate header,
+X-Sonic-Sieve-Token, permits that integration to retain AudioMuse host authentication
+in the Authorization header. The host API token must remain on the trusted server.
 
 A separate Similar Song URL in the Navidrome plugin is needed before redirecting
 that operation without affecting Artist Radio and other similarity modes.
@@ -32,10 +36,15 @@ Annotated samples verified rated songs with and without hearts.
 
 ## Validation
 
-- 21 automated policy, adapter, service, endpoint, and registration tests.
+- Automated policy, adapter, service, endpoint, registration and multi-user tests.
+  Multi-user coverage includes both accounts enabled, one disabled, separate
+  Navidrome credentials, independent policies, concurrent requests, configuration
+  reload, token revocation, spoofed usernames, and invalid-configuration failures.
 - A bounded read-only integration trial against a real installation returned
   HTTP 200: 12 candidates requested, 12 preferences read, 3 eligible tracks
   returned. Assertions checked rating eligibility and heart ordering.
+  This earlier live trial verified one configured account; multi-user behavior
+  is validated with synthetic accounts, not production account credentials.
 - A code-only archive was built and its plugin registration verified.
 - No production plugin installation, ratings or playlist writes, service restart,
   or production configuration changes were performed.

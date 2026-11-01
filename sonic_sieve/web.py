@@ -1,39 +1,34 @@
 """Additive AudioMuse blueprint and isolated development application."""
 
-import hmac
 import os
 
 from flask import Blueprint, Flask, jsonify, request
 
-from .service import AudioMuse, BackendError, FilterService, Navidrome
+from .accounts import Account, AccountRouter, AuthenticationError, ConfigurationError, router_from_env
+from .service import BackendError
 
 PLUGIN_ID = "sonic_sieve"
 ALLOWED = {"item_id", "title", "artist", "n", "server", "eliminate_duplicates",
            "radius_similarity", "mood_similarity"}
 
 
-def service_from_env():
-    return FilterService(
-        AudioMuse(os.environ["AM_PREF_AUDIOMUSE_URL"], os.environ["AM_PREF_SERVER"],
-                  os.environ.get("AM_PREF_UPSTREAM_TOKEN", "")),
-        Navidrome(os.environ["AM_PREF_NAVIDROME_URL"],
-                  os.environ.get("AM_PREF_NAVIDROME_USER", ""),
-                  os.environ.get("AM_PREF_NAVIDROME_PASSWORD", ""),
-                  os.environ.get("AM_PREF_NAVIDROME_API_KEY", "")))
-
-
-def create_blueprint(service=None, token=None):
+def create_blueprint(service=None, token=None, router=None):
     bp = Blueprint(PLUGIN_ID, __name__)
 
     @bp.get("/api/similar_tracks")
     def similar_tracks():
-        secret = token if token is not None else os.environ.get("AM_PREF_TOKEN", "")
-        if not secret:
-            return jsonify(error="preference endpoint is not configured"), 503
-        supplied = request.headers.get("Authorization", "")
-        if not hmac.compare_digest(supplied.encode(), ("Bearer " + secret).encode()):
-            return jsonify(error="authentication required"), 401
         try:
+            if service is not None:
+                secret = token if token is not None else os.environ.get("AM_PREF_TOKEN", "")
+                if not secret:
+                    raise ConfigurationError("preference endpoint is not configured")
+                routes = AccountRouter([Account("legacy", secret, service)])
+            else:
+                routes = router if router is not None else router_from_env()
+            backend = routes.resolve(request.headers.get("Authorization", ""),
+                                     request.headers.get("X-Sonic-Sieve-Token"))
+            if any(key in request.headers for key in ("X-Sonic-Sieve-User", "X-Sonic-Sieve-Username")):
+                raise ValueError("username headers are not supported; use an account token")
             if set(request.args) - ALLOWED or any(len(request.args.getlist(k)) != 1 for k in request.args):
                 raise ValueError("unknown or repeated parameter")
             params = request.args.to_dict()
@@ -45,7 +40,6 @@ def create_blueprint(service=None, token=None):
             for key in ("eliminate_duplicates", "radius_similarity", "mood_similarity"):
                 if key in params and params[key] not in {"true", "false"}:
                     raise ValueError("invalid boolean parameter")
-            backend = service or service_from_env()
             if params.get("server", backend.audiomuse.server) != backend.audiomuse.server:
                 raise ValueError("server does not match configured preference account")
             params.pop("server", None)
@@ -53,7 +47,9 @@ def create_blueprint(service=None, token=None):
             return jsonify(result)
         except ValueError as error:
             return jsonify(error=str(error)), 400
-        except KeyError:
+        except AuthenticationError:
+            return jsonify(error="authentication required"), 401
+        except ConfigurationError:
             return jsonify(error="preference endpoint is not configured"), 503
         except BackendError:
             return jsonify(error="preference backend unavailable"), 502
@@ -61,7 +57,7 @@ def create_blueprint(service=None, token=None):
     return bp
 
 
-def create_app(service=None, token=None):
+def create_app(service=None, token=None, router=None):
     app = Flask(__name__)
-    app.register_blueprint(create_blueprint(service, token))
+    app.register_blueprint(create_blueprint(service, token, router))
     return app

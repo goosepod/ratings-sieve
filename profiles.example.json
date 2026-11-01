@@ -1,0 +1,22 @@
+{
+  "profiles": [
+    {
+      "username": "listener_one",
+      "enabled": true,
+      "token_env": "SONIC_SIEVE_LISTENER_ONE_TOKEN",
+      "password_env": "SONIC_SIEVE_LISTENER_ONE_PASSWORD",
+      "policy": {
+        "minimum_rating": 3,
+        "below_threshold": "exclude",
+        "include_unrated": true,
+        "boost_hearts": true,
+        "candidate_multiplier": 4
+      }
+    },
+    {
+      "username": "listener_two",
+      "enabled": false,
+      "token_env": "SONIC_SIEVE_LISTENER_TWO_TOKEN"
+    }
+  ]
+}

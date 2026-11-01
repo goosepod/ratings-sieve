@@ -3,5 +3,7 @@ __pycache__/
 .venv/
 .reference/
 .env
+profiles.json
+profiles.local.json
 dist/
 *.egg-info/

@@ -3,9 +3,11 @@
 import hashlib
 from pathlib import Path
 import zipfile
+import tomllib
 
 root = Path(__file__).resolve().parents[1]
-out = root / "dist" / "sonic_sieve-0.1.0.zip"
+version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+out = root / "dist" / f"sonic_sieve-{version}.zip"
 out.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
     for source in sorted((root / "sonic_sieve").glob("*.py")):
