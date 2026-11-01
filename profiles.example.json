@@ -3,8 +3,8 @@
     {
       "username": "listener_one",
       "enabled": true,
-      "token_env": "SONIC_SIEVE_LISTENER_ONE_TOKEN",
-      "password_env": "SONIC_SIEVE_LISTENER_ONE_PASSWORD",
+      "token_env": "RATINGS_SIEVE_LISTENER_ONE_TOKEN",
+      "password_env": "RATINGS_SIEVE_LISTENER_ONE_PASSWORD",
       "policy": {
         "minimum_rating": 3,
         "below_threshold": "exclude",
@@ -16,7 +16,7 @@
     {
       "username": "listener_two",
       "enabled": false,
-      "token_env": "SONIC_SIEVE_LISTENER_TWO_TOKEN"
+      "token_env": "RATINGS_SIEVE_LISTENER_TWO_TOKEN"
     }
   ]
 }

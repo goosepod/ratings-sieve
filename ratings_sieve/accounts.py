@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .core import Policy
 from .service import AudioMuse, BypassService, FilterService, Navidrome
+from .cache import SQLitePreferenceCache
 
 
 class AuthenticationError(Exception):
@@ -75,12 +76,17 @@ def _load_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=unique_keys)
 
 
-def router_from_env(env=None):
+def router_from_env(env=None, cache_factory=None):
     """Reload the profile file each request so edits and token revocation apply."""
     env = dict(os.environ if env is None else env)
     try:
+        cache_ttl = int(env.get("RATINGS_SIEVE_CACHE_TTL_SECONDS", "60"))
+        if not 0 <= cache_ttl <= 86400:
+            raise ConfigurationError("invalid cache TTL")
         am = AudioMuse(env["AM_PREF_AUDIOMUSE_URL"], env["AM_PREF_SERVER"],
                        env.get("AM_PREF_UPSTREAM_TOKEN", ""))
+        cache = (cache_factory() if cache_factory is not None else SQLitePreferenceCache(
+            env.get("RATINGS_SIEVE_CACHE_DB", "instance/ratings-sieve-cache.sqlite3"))) if cache_ttl else None
         if "AM_PREF_PROFILES_FILE" not in env:
             # Preserve the explicitly configured single-account mode.
             token = _secret(env, "AM_PREF_TOKEN")
@@ -88,7 +94,8 @@ def router_from_env(env=None):
                            env.get("AM_PREF_NAVIDROME_USER", ""),
                            env.get("AM_PREF_NAVIDROME_PASSWORD", ""),
                            env.get("AM_PREF_NAVIDROME_API_KEY", ""))
-            return AccountRouter([Account("legacy", token, FilterService(am, nd))])
+            return AccountRouter([Account("legacy", token, FilterService(am, nd,
+                cache=cache, cache_ttl=cache_ttl))])
 
         config = _load_json(env["AM_PREF_PROFILES_FILE"])
         if (not isinstance(config, dict) or set(config) != {"profiles"}
@@ -115,7 +122,7 @@ def router_from_env(env=None):
                 nd = Navidrome(env["AM_PREF_NAVIDROME_URL"], profile["username"],
                                _secret(env, password_key) if password_key else "",
                                _secret(env, api_key) if api_key else "")
-                backend = FilterService(am, nd, policy)
+                backend = FilterService(am, nd, policy, cache=cache, cache_ttl=cache_ttl)
             else:
                 backend = BypassService(am)
             accounts.append(Account(profile["username"], token, backend))

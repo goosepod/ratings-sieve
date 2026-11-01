@@ -7,3 +7,6 @@ profiles.json
 profiles.local.json
 dist/
 *.egg-info/
+instance/
+*.sqlite3
+*.sqlite3-*

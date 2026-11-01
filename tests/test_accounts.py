@@ -5,12 +5,12 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from sonic_sieve.accounts import (
+from ratings_sieve.accounts import (
     Account, AccountRouter, AuthenticationError, ConfigurationError, router_from_env,
 )
-from sonic_sieve.core import Policy, Preference
-from sonic_sieve.service import BackendError, BypassService, FilterService
-from sonic_sieve.web import create_app
+from ratings_sieve.core import Policy, Preference
+from ratings_sieve.service import BackendError, BypassService, FilterService
+from ratings_sieve.web import create_app
 
 
 def tracks():
@@ -74,12 +74,12 @@ class RoutingTests(unittest.TestCase):
             response = client.get("/api/similar_tracks?item_id=seed&" + selector + "=listener_two",
                                   headers={"Authorization": "Bearer first-token"})
             self.assertEqual(response.status_code, 400)
-        for header in ("X-Sonic-Sieve-User", "X-Sonic-Sieve-Username"):
+        for header in ("X-Ratings-Sieve-User", "X-Ratings-Sieve-Username"):
             self.assertEqual(self.request("first-token", **{header: "listener_two"}).status_code, 400)
         self.second.preference.assert_not_called()
 
     def test_dedicated_token_header_supports_outer_host_authentication(self):
-        result = self.request("outer-host-api-token", **{"X-Sonic-Sieve-Token": "first-token"})
+        result = self.request("outer-host-api-token", **{"X-Ratings-Sieve-Token": "first-token"})
         self.assertEqual(result.status_code, 200)
         self.assertEqual([t["item_id"] for t in result.json], ["c", "b"])
         self.second.preference.assert_not_called()
@@ -87,7 +87,7 @@ class RoutingTests(unittest.TestCase):
     def test_bad_explicit_token_cannot_fall_back_to_valid_bearer(self):
         for token in ("ordinary-token", "first-token"):
             for explicit in ("", "unknown", "ordinary-token"):
-                self.assertEqual(self.request(token, **{"X-Sonic-Sieve-Token": explicit}).status_code, 401)
+                self.assertEqual(self.request(token, **{"X-Ratings-Sieve-Token": explicit}).status_code, 401)
         self.am.candidates.assert_not_called()
 
     def test_one_account_backend_failure_never_falls_back_to_another(self):
@@ -147,6 +147,7 @@ class ProfileConfigurationTests(unittest.TestCase):
         self.env = {
             "AM_PREF_AUDIOMUSE_URL": "http://am", "AM_PREF_SERVER": "Navidrome",
             "AM_PREF_NAVIDROME_URL": "http://nd", "AM_PREF_PROFILES_FILE": str(self.path),
+            "RATINGS_SIEVE_CACHE_DB": str(Path(self.tmp.name) / "cache.sqlite3"),
             "FIRST_TOKEN": "first-secret", "SECOND_TOKEN": "second-secret",
             "FIRST_PASSWORD": "first-password", "SECOND_PASSWORD": "second-password",
             "AM_PREF_TOKEN": "ordinary-token",
@@ -189,7 +190,7 @@ class ProfileConfigurationTests(unittest.TestCase):
 
     def test_token_revocation_and_policy_edits_reload_without_state_leakage(self):
         with patch.dict("os.environ", self.env, clear=True):
-            with patch("sonic_sieve.service.JsonHTTP.get", side_effect=self.http):
+            with patch("ratings_sieve.service.JsonHTTP.get", side_effect=self.http):
                 client = create_app().test_client()
                 headers = {"Authorization": "Bearer first-secret"}
                 url = "/api/similar_tracks?item_id=seed&n=3"
@@ -220,7 +221,7 @@ class ProfileConfigurationTests(unittest.TestCase):
         self.profiles[1].update(enabled=True, password_env="SECOND_PASSWORD")
         self.write()
         with patch.dict("os.environ", self.env, clear=True):
-            with patch("sonic_sieve.service.JsonHTTP.get", side_effect=self.http) as http:
+            with patch("ratings_sieve.service.JsonHTTP.get", side_effect=self.http) as http:
                 client = create_app().test_client()
                 for token, expected, username in (("first-secret", ["c", "b"], "listener_one"),
                                                    ("second-secret", ["a", "c"], "listener_two")):
@@ -233,6 +234,28 @@ class ProfileConfigurationTests(unittest.TestCase):
                     self.assertEqual(len(calls), 3)
                     self.assertTrue(all(call.args[1]["u"] == username for call in calls))
                     self.assertTrue(all("p" not in call.args[1] for call in calls))
+                    http.reset_mock()
+                    cached = client.get("/api/similar_tracks?item_id=seed&n=3",
+                                        headers={"Authorization": "Bearer " + token})
+                    self.assertEqual(cached.json, response.json)
+                    self.assertTrue(all(not call.args[0].startswith("http://nd/")
+                                        for call in http.call_args_list))
+
+    def test_disabled_profile_does_not_create_or_read_a_cache_database(self):
+        with patch.dict("os.environ", self.env, clear=True):
+            with patch("ratings_sieve.service.JsonHTTP.get", side_effect=self.http) as http:
+                response = create_app().test_client().get("/api/similar_tracks?item_id=seed&n=3",
+                                headers={"Authorization": "Bearer second-secret"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, tracks())
+        self.assertFalse(Path(self.env["RATINGS_SIEVE_CACHE_DB"]).exists())
+        self.assertEqual(http.call_count, 1)
+
+    def test_invalid_cache_ttl_rejects_configuration(self):
+        for value in ("-1", "86401", "bad", "0.5"):
+            self.env["RATINGS_SIEVE_CACHE_TTL_SECONDS"] = value
+            with self.subTest(value=value), self.assertRaises(ConfigurationError):
+                router_from_env(self.env)
 
     def test_enabled_api_key_profile(self):
         self.profiles[0].pop("password_env")
@@ -246,9 +269,9 @@ class ProfileConfigurationTests(unittest.TestCase):
     def test_example_profile_file_is_valid_with_example_environment_bindings(self):
         example = Path(__file__).resolve().parents[1] / "profiles.example.json"
         self.env.update(AM_PREF_PROFILES_FILE=str(example),
-                        SONIC_SIEVE_LISTENER_ONE_TOKEN="example-first-token",
-                        SONIC_SIEVE_LISTENER_ONE_PASSWORD="example-password",
-                        SONIC_SIEVE_LISTENER_TWO_TOKEN="example-second-token")
+                        RATINGS_SIEVE_LISTENER_ONE_TOKEN="example-first-token",
+                        RATINGS_SIEVE_LISTENER_ONE_PASSWORD="example-password",
+                        RATINGS_SIEVE_LISTENER_TWO_TOKEN="example-second-token")
         router = router_from_env(self.env)
         self.assertIsInstance(router.resolve("Bearer example-first-token"), FilterService)
         self.assertIsInstance(router.resolve("Bearer example-second-token"), BypassService)

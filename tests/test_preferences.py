@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from sonic_sieve.core import Policy, Preference, select, unique_candidates
-from sonic_sieve.service import AudioMuse, BackendError, FilterService, Navidrome
-from sonic_sieve.web import create_app
+from ratings_sieve.core import Policy, Preference, select, unique_candidates
+from ratings_sieve.service import AudioMuse, BackendError, FilterService, Navidrome
+from ratings_sieve.web import create_app
 
 
 def track(item_id):
@@ -163,16 +163,17 @@ class WebTests(unittest.TestCase):
         self.assertEqual(client.get("/api/similar_tracks?item_id=seed").status_code, 503)
 
     def test_audio_muse_registration(self):
-        from sonic_sieve import register
+        from ratings_sieve import register
         from flask import Flask
         ctx = Mock()
         register(ctx)
+        ctx.on_install.assert_called_once()
         bp = ctx.add_blueprint.call_args.args[0]
-        self.assertEqual(bp.name, "sonic_sieve")
+        self.assertEqual(bp.name, "ratings_sieve")
         app = Flask("plugin-test")
-        app.register_blueprint(bp, url_prefix="/plugins/sonic_sieve")
+        app.register_blueprint(bp, url_prefix="/plugins/ratings_sieve")
         with patch.dict("os.environ", {"AM_PREF_TOKEN": ""}):
-            self.assertEqual(app.test_client().get("/plugins/sonic_sieve/api/similar_tracks").status_code, 503)
+            self.assertEqual(app.test_client().get("/plugins/ratings_sieve/api/similar_tracks").status_code, 503)
 
 
 if __name__ == "__main__":

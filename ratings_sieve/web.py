@@ -7,12 +7,12 @@ from flask import Blueprint, Flask, jsonify, request
 from .accounts import Account, AccountRouter, AuthenticationError, ConfigurationError, router_from_env
 from .service import BackendError
 
-PLUGIN_ID = "sonic_sieve"
+PLUGIN_ID = "ratings_sieve"
 ALLOWED = {"item_id", "title", "artist", "n", "server", "eliminate_duplicates",
            "radius_similarity", "mood_similarity"}
 
 
-def create_blueprint(service=None, token=None, router=None):
+def create_blueprint(service=None, token=None, router=None, cache_factory=None):
     bp = Blueprint(PLUGIN_ID, __name__)
 
     @bp.get("/api/similar_tracks")
@@ -24,10 +24,10 @@ def create_blueprint(service=None, token=None, router=None):
                     raise ConfigurationError("preference endpoint is not configured")
                 routes = AccountRouter([Account("legacy", secret, service)])
             else:
-                routes = router if router is not None else router_from_env()
+                routes = router if router is not None else router_from_env(cache_factory=cache_factory)
             backend = routes.resolve(request.headers.get("Authorization", ""),
-                                     request.headers.get("X-Sonic-Sieve-Token"))
-            if any(key in request.headers for key in ("X-Sonic-Sieve-User", "X-Sonic-Sieve-Username")):
+                                     request.headers.get("X-Ratings-Sieve-Token"))
+            if any(key in request.headers for key in ("X-Ratings-Sieve-User", "X-Ratings-Sieve-Username")):
                 raise ValueError("username headers are not supported; use an account token")
             if set(request.args) - ALLOWED or any(len(request.args.getlist(k)) != 1 for k in request.args):
                 raise ValueError("unknown or repeated parameter")

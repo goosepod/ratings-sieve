@@ -1,15 +1,15 @@
 {
-  "id": "sonic_sieve",
-  "name": "Sonic Sieve",
+  "id": "ratings_sieve",
+  "name": "Ratings Sieve",
   "author": "Self Hosting",
   "description": "Per-user rating and heart filtering for Similar Song with independent on/off settings.",
   "targets": ["flask"],
   "requirements": [],
   "versions": [
     {
-      "version": "0.2.0",
+      "version": "0.3.0",
       "min_core_version": "3.7.0",
-      "changelog": "Add independent account policies, token-bound identity, and unfiltered bypass for disabled accounts."
+      "changelog": "Rename to Ratings Sieve and add persistent per-user preference caching in AudioMuse PostgreSQL or standalone SQLite."
     }
   ]
 }
