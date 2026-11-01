@@ -1,0 +1,80 @@
+<section class="rs-settings">
+  <header>
+    <h1>Ratings Sieve</h1>
+    <p>Use each person's Navidrome ratings and hearts to refine AudioMuse recommendations.</p>
+  </header>
+  {% if error %}<p class="rs-notice rs-error" role="alert">{{ error }}</p>{% endif %}
+  {% if message %}<p class="rs-notice" role="status">{{ message }}</p>{% endif %}
+  <p id="rs-action-result" role="status" hidden></p>
+  {% if issued %}
+  <section class="rs-issued" aria-label="New request tokens">
+    <h2>Copy your new request tokens</h2>
+    <p>These tokens are shown once. Store them privately for your integration. You can generate replacements below.</p>
+    {% for username, token in issued.items() %}
+    <label>{{ username }}<input type="text" readonly value="{{ token }}" aria-label="Request token for {{ username }}" autocomplete="off" spellcheck="false"></label>
+    {% endfor %}
+  </section>
+  {% endif %}
+  <form method="post" id="rs-settings-form" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="revision" value="{{ configuration.revision }}">
+    <fieldset>
+      <legend>Connections and cache</legend>
+      <div class="rs-grid">
+        <label>Navidrome server
+          <select name="server_id" required>
+            <option value="">Choose a server</option>
+            {% for server in servers %}<option value="{{ server.server_id }}" {% if server.server_id == configuration.server_id %}selected{% endif %}>{{ server.name }}</option>{% endfor %}
+          </select>
+          <small>Servers are managed in AudioMuse's music server settings.</small>
+        </label>
+        <label>AudioMuse API URL
+          <input type="url" name="audiomuse_url" value="{{ configuration.audiomuse_url }}" required>
+          <small>The original AudioMuse API, reachable from this container.</small>
+        </label>
+        <label>Cache lifetime (seconds)
+          <input type="number" name="cache_ttl" value="{{ configuration.cache_ttl }}" min="0" max="86400" required>
+          <small>Default 60. Set 0 to fetch preferences directly from Navidrome.</small>
+        </label>
+        <label>Custom AudioMuse API token (optional)
+          <input type="password" name="upstream_token" value="" autocomplete="new-password" placeholder="{% if configuration.upstream_encrypted %}Saved — leave blank to keep{% else %}Uses AudioMuse's own token{% endif %}">
+          <small>Used only for this plugin's calls to AudioMuse. Saved values are hidden.</small>
+        </label>
+      </div>
+      {% if configuration.upstream_encrypted %}<label class="rs-check"><input type="checkbox" name="use_default_upstream"> Use AudioMuse's own token instead of the saved custom token</label>{% endif %}
+    </fieldset>
+    <div class="rs-heading"><h2>Accounts</h2><button type="button" id="rs-add-account">Add account</button></div>
+    <p>Enable filtering independently for each person. Disabled accounts receive ordinary AudioMuse recommendations.</p>
+    {% macro account_card(profile, is_template=false) %}
+      {% set id = profile.id %}
+      <fieldset class="rs-account" data-account>
+        <legend>Navidrome account</legend>
+        <input type="hidden" name="profile_id" value="{{ id }}">
+        <div class="rs-grid">
+          <label>Navidrome username<input name="p.{{ id }}.username" value="{{ profile.username }}" maxlength="128" required autocomplete="off"></label>
+          <label>Credential type<select name="p.{{ id }}.credential_type"><option value="password" {% if profile.credential_type == 'password' %}selected{% endif %}>Password</option><option value="api_key" {% if profile.credential_type == 'api_key' %}selected{% endif %}>API key</option></select></label>
+          <label>Password or API key<input type="password" name="p.{{ id }}.credential" value="" autocomplete="new-password" placeholder="{% if profile.credential_encrypted %}Saved — leave blank to keep{% else %}Required when filtering is enabled{% endif %}"><small>Encrypted before saving. Changing credential type requires a new value.</small></label>
+          <label>Minimum rating<select name="p.{{ id }}.minimum_rating">{% for value in range(1,6) %}<option value="{{ value }}" {% if profile.policy.minimum_rating == value %}selected{% endif %}>{{ value }} star{% if value != 1 %}s{% endif %}</option>{% endfor %}</select></label>
+          <label>Candidate multiplier<input type="number" name="p.{{ id }}.candidate_multiplier" value="{{ profile.policy.candidate_multiplier }}" min="1" max="10" required><small>Request more candidates to compensate for exclusions.</small></label>
+        </div>
+        <div class="rs-options">
+          <label class="rs-check"><input type="checkbox" name="p.{{ id }}.enabled" {% if profile.enabled %}checked{% endif %}> Enable filtering</label>
+          <label class="rs-check"><input type="checkbox" name="p.{{ id }}.include_unrated" {% if profile.policy.include_unrated %}checked{% endif %}> Include unrated tracks</label>
+          <label class="rs-check"><input type="checkbox" name="p.{{ id }}.boost_hearts" {% if profile.policy.boost_hearts %}checked{% endif %}> Boost hearts</label>
+          {% if profile.token_hash %}<label class="rs-check"><input type="checkbox" name="p.{{ id }}.rotate_token"> Generate a new request token on save</label>{% else %}<small>A request token will be generated when you save.</small>{% endif %}
+        </div>
+        <button type="button" data-remove-account>Remove account</button>
+      </fieldset>
+    {% endmacro %}
+    <div id="rs-accounts">{% for profile in configuration.profiles %}{{ account_card(profile) }}{% endfor %}</div>
+    <template id="rs-account-template">{{ account_card({'id':'__ID__','username':'','credential_type':'password','credential_encrypted':'','enabled':false,'token_hash':'','policy':{'minimum_rating':3,'candidate_multiplier':4,'include_unrated':true,'boost_hearts':true}}, true) }}</template>
+    <div class="rs-actions">
+      <button type="submit" name="action" value="save">Save settings</button>
+      <button type="submit" name="action" value="test">Test connections</button>
+      <button type="submit" name="action" value="clear_cache" formnovalidate>Clear cached ratings</button>
+    </div>
+  </form>
+  <aside><p>Request tokens identify account profiles. Automatic listener selection through the existing Navidrome plugin still needs an integration. AudioMuse's API token must remain on the trusted integration server.</p><p>Back up AudioMuse's database and the persistent plugins directory together to retain encrypted credentials.</p></aside>
+</section>
+<link rel="stylesheet" href="{{ url_for('ratings_sieve.static', filename='settings.css') }}">
+<script src="{{ url_for('ratings_sieve.static', filename='settings.js') }}" defer></script>

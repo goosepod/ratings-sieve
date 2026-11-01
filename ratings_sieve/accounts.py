@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import hmac
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,7 @@ class Account:
     name: str
     token: str = field(repr=False)
     service: object = field(repr=False)
+    token_hashed: bool = False
 
 
 class AccountRouter:
@@ -48,7 +50,8 @@ class AccountRouter:
             authorization[7:] if authorization.startswith("Bearer ") else "")
         selected = None
         for account in self.accounts:
-            if hmac.compare_digest(supplied.encode(), account.token.encode()):
+            candidate = hashlib.sha256(supplied.encode()).hexdigest() if account.token_hashed else supplied
+            if hmac.compare_digest(candidate.encode(), account.token.encode()):
                 selected = account.service
         if selected is not None:
             return selected

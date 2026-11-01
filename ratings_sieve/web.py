@@ -12,8 +12,11 @@ ALLOWED = {"item_id", "title", "artist", "n", "server", "eliminate_duplicates",
            "radius_similarity", "mood_similarity"}
 
 
-def create_blueprint(service=None, token=None, router=None, cache_factory=None):
-    bp = Blueprint(PLUGIN_ID, __name__)
+def create_blueprint(service=None, token=None, router=None, cache_factory=None, settings_store=None):
+    bp = Blueprint(PLUGIN_ID, __name__, template_folder="templates", static_folder="static")
+    if settings_store is not None:
+        from .settings import register_settings
+        register_settings(bp, settings_store, cache_factory)
 
     @bp.get("/api/similar_tracks")
     def similar_tracks():
@@ -24,7 +27,12 @@ def create_blueprint(service=None, token=None, router=None, cache_factory=None):
                     raise ConfigurationError("preference endpoint is not configured")
                 routes = AccountRouter([Account("legacy", secret, service)])
             else:
-                routes = router if router is not None else router_from_env(cache_factory=cache_factory)
+                saved = settings_store.load() if settings_store is not None else None
+                if saved is not None:
+                    from .settings import router_from_settings
+                    routes = router_from_settings(saved, settings_store, cache_factory)
+                else:
+                    routes = router if router is not None else router_from_env(cache_factory=cache_factory)
             backend = routes.resolve(request.headers.get("Authorization", ""),
                                      request.headers.get("X-Ratings-Sieve-Token"))
             if any(key in request.headers for key in ("X-Ratings-Sieve-User", "X-Ratings-Sieve-Username")):

@@ -111,6 +111,12 @@ class SQLPreferenceCache:
                 [(scope.server, scope.account, item_id, pref.rating, pref.heart, fetched_at)
                  for item_id, (pref, fetched_at) in entries.items()])
 
+    def clear(self):
+        """Remove only this plugin's cached preferences."""
+        with self._transaction() as cursor:
+            cursor.execute(f"DELETE FROM {self.table_name}")
+            return cursor.rowcount
+
 
 class SQLitePreferenceCache(SQLPreferenceCache):
     def __init__(self, path):

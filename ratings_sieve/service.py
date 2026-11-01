@@ -58,6 +58,15 @@ class AudioMuse:
             raise BackendError("invalid similarity response")
         return result[:count]
 
+    def check_connection(self):
+        result = self.http.get(self.url + "/api/health", {}, self.headers, timeout=5)
+        if not isinstance(result, dict) or result.get("error"):
+            raise BackendError("AudioMuse connection failed")
+        # Health is public in AudioMuse; status also verifies API authentication.
+        result = self.http.get(self.url + "/api/status", {}, self.headers, timeout=5)
+        if not isinstance(result, dict) or result.get("error"):
+            raise BackendError("AudioMuse API authentication failed")
+
 
 class Navidrome:
     def __init__(self, url, username="", password="", api_key="", http=None):
@@ -67,14 +76,24 @@ class Navidrome:
         self.username, self.password, self.api_key = username, password, api_key
         self.http = http or JsonHTTP()
 
-    def preference(self, item_id, timeout=5):
-        params = {"v": "1.16.1", "c": "ratings-sieve", "f": "json", "id": item_id}
+    def _auth_params(self):
+        params = {"v": "1.16.1", "c": "ratings-sieve", "f": "json"}
         if self.api_key:
             params["apiKey"] = self.api_key
         else:
             salt = secrets.token_hex(16)
             params.update(u=self.username, s=salt,
                           t=hashlib.md5((self.password + salt).encode(), usedforsecurity=False).hexdigest())
+        return params
+
+    def check_connection(self):
+        result = self.http.get(self.url + "/rest/ping.view", self._auth_params(), timeout=5)
+        envelope = result.get("subsonic-response") if isinstance(result, dict) else None
+        if not isinstance(envelope, dict) or envelope.get("status") != "ok":
+            raise BackendError("Navidrome connection failed")
+
+    def preference(self, item_id, timeout=5):
+        params = dict(self._auth_params(), id=item_id)
         result = self.http.get(self.url + "/rest/getSong.view", params, timeout=timeout)
         try:
             envelope = result["subsonic-response"]

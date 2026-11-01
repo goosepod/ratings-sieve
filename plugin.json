@@ -4,12 +4,12 @@
   "author": "Self Hosting",
   "description": "Per-user rating and heart filtering for Similar Song with independent on/off settings.",
   "targets": ["flask"],
-  "requirements": [],
+  "requirements": ["cryptography==50.0.0"],
   "versions": [
     {
-      "version": "0.3.0",
+      "version": "0.4.0",
       "min_core_version": "3.7.0",
-      "changelog": "Rename to Ratings Sieve and add persistent per-user preference caching in AudioMuse PostgreSQL or standalone SQLite."
+      "changelog": "Add an admin settings page with database configuration, encrypted credentials, account controls, connection tests and cache clearing."
     }
   ]
 }

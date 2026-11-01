@@ -83,10 +83,60 @@ def check_audiomuse_facade(dsn):
             pref = sys.modules[name + ".core"].Preference(4, True)
             store.put_many(scope, {"song": (pref, 100)})
             assert store.get_many(scope, ["song"], 120, 60) == {"song": pref}
+            assert store.clear() == 1
+            assert store.get_many(scope, ["song"], 120, 60) == {}
             assert not db.closed
         print("Actual AudioMuse PluginContext, install hook, namespacing and borrowed connection passed")
+        check_settings_page(api, context, db)
     finally:
         db.close()
+
+
+def check_settings_page(api, context, db):
+    """Use native get_setting/set_setting against the disposable database."""
+    import re
+    import tempfile
+    from unittest.mock import patch
+    from flask import Flask, g
+    import database
+
+    with db.cursor() as cursor:
+        cursor.execute("CREATE TABLE IF NOT EXISTS plugins (id TEXT PRIMARY KEY, settings JSONB, updated_at TIMESTAMP)")
+        cursor.execute("INSERT INTO plugins (id, settings) VALUES ('ratings_sieve', '{}') ON CONFLICT DO NOTHING")
+    db.commit()
+    app = Flask("native-settings-check")
+    app.before_request(lambda: setattr(g, "auth_role", "admin"))
+    app.register_blueprint(context.blueprint, url_prefix="/plugins/ratings_sieve")
+    servers = [{"server_id": "test-server", "name": "Test Navidrome", "server_type": "navidrome", "creds": {"url": "http://test-navidrome"}}]
+    with tempfile.TemporaryDirectory() as key_dir, \
+            patch.object(database, "get_db", return_value=db), \
+            patch.object(api, "list_servers", return_value=servers), \
+            patch.object(api, "render_page", side_effect=lambda body, **kwargs: body), \
+            patch.object(api.config, "PLUGINS_DIR", key_dir), \
+            patch.object(api.config, "AUTH_ENABLED", True):
+        client = app.test_client()
+        page = client.get("/plugins/ratings_sieve/settings")
+        assert page.status_code == 200
+        csrf = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+        profile = uuid.uuid4().hex
+        prefix = "p." + profile + "."
+        form = {"csrf_token": csrf, "revision": "", "server_id": "test-server", "audiomuse_url": "http://test-audiomuse",
+                "cache_ttl": "60", "action": "save", "profile_id": profile,
+                prefix+"username": "test-person", prefix+"enabled": "on", prefix+"credential_type": "password",
+                prefix+"credential": "synthetic-private-password", prefix+"minimum_rating": "3",
+                prefix+"candidate_multiplier": "4", prefix+"include_unrated": "on", prefix+"boost_hearts": "on"}
+        result = client.post("/plugins/ratings_sieve/settings", data=form)
+        assert result.status_code == 200, result.text
+        assert "synthetic-private-password" not in result.text
+        with db.cursor() as cursor:
+            cursor.execute("SELECT settings FROM plugins WHERE id='ratings_sieve'")
+            saved = cursor.fetchone()[0]["configuration"]
+        assert saved["profiles"][0]["credential_encrypted"].startswith("aesgcm:v1:")
+        assert len(saved["profiles"][0]["token_hash"]) == 64
+        assert "synthetic-private-password" not in str(saved)
+        assert "Copy your new request tokens" in result.text
+        assert "Copy your new request tokens" not in client.get("/plugins/ratings_sieve/settings").text
+        print("Actual AudioMuse settings page, native database settings, encrypted credential save and token hashing passed")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,9 @@ version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["
 out = root / "dist" / f"ratings_sieve-{version}.zip"
 out.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
-    for source in sorted((root / "ratings_sieve").glob("*.py")):
-        archive.write(source, source.name)
+    package = root / "ratings_sieve"
+    for source in sorted(package.rglob("*")):
+        if source.is_file() and source.suffix in {".py", ".html", ".js", ".css"} and "__pycache__" not in source.parts:
+            archive.write(source, source.relative_to(package))
 print(out)
 print("sha256", hashlib.sha256(out.read_bytes()).hexdigest())

@@ -49,6 +49,21 @@ through Navidrome. TTL defaults to 60 seconds. No stale-on-error behavior is use
 Cache failures fall back to direct API queries; API failures never create unrated
 cache records. Disabled profiles bypass all preference database work.
 
+## AudioMuse settings page
+
+The plugin registers `ratings_sieve.settings` explicitly with the host, and all
+settings actions use that endpoint. Host admin authorization is supplemented by
+an explicit role check and signed cookie-bound CSRF tokens. Configuration is saved
+through `get_setting`/`set_setting`; saved UI settings take precedence over file or
+environment configuration. No registry account password is reused for profiles.
+
+Credentials use AES-256-GCM with a persistent plugin key and profile-bound
+associated data. The key is created atomically outside the database and must be
+backed up with it. Request tokens are generated per account, shown once, and saved
+only as SHA-256 hashes. Secrets are never populated into HTML form fields.
+The archive includes the settings HTML, JavaScript and CSS; cryptography is a
+declared plugin dependency for supported container builds.
+
 ## Validation
 
 - Automated policy, adapter, service, endpoint, registration and multi-user tests.
